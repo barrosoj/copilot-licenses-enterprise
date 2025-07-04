@@ -11,7 +11,7 @@
     "action",
     "billing"
   ],
-  "author": "",
+  "author": "barrosoj",
   "license": "MIT",
   "engines": {
     "node": ">=14.0.0"
