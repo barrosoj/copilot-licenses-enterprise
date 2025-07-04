@@ -1,0 +1,174 @@
+name: 'GitHub Copilot License Retrieval'
+description: 'Retrieve and report on GitHub Copilot licenses across an enterprise'
+author: 'Your Organization'
+
+branding:
+  icon: 'users'
+  color: 'blue'
+
+inputs:
+  enterprise:
+    description: 'GitHub Enterprise name'
+    required: true
+  token:
+    description: 'GitHub token with copilot billing permissions'
+    required: true
+  output-format:
+    description: 'Output format (json or csv)'
+    required: false
+    default: 'json'
+  output-file:
+    description: 'Output file name (without extension)'
+    required: false
+    default: 'copilot_licenses'
+  include-billing:
+    description: 'Include billing summary information'
+    required: false
+    default: 'false'
+  include-summary:
+    description: 'Show summary information in logs'
+    required: false
+    default: 'true'
+  runtime:
+    description: 'Runtime to use (nodejs or python)'
+    required: false
+    default: 'nodejs'
+  per-page:
+    description: 'Results per page (max 100)'
+    required: false
+    default: '100'
+
+outputs:
+  total-seats:
+    description: 'Total number of Copilot seats'
+    value: ${{ steps.retrieve-licenses.outputs.total-seats }}
+  output-file-json:
+    description: 'Path to the generated JSON file'
+    value: ${{ steps.retrieve-licenses.outputs.json-file }}
+  output-file-csv:
+    description: 'Path to the generated CSV file'
+    value: ${{ steps.retrieve-licenses.outputs.csv-file }}
+  organizations:
+    description: 'List of organizations with Copilot licenses'
+    value: ${{ steps.retrieve-licenses.outputs.organizations }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node.js
+      if: inputs.runtime == 'nodejs'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        
+    - name: Set up Python
+      if: inputs.runtime == 'python'
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+        
+    - name: Install Python dependencies
+      if: inputs.runtime == 'python'
+      shell: bash
+      run: |
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        else
+          pip install requests
+        fi
+        
+    - name: Retrieve Copilot licenses
+      id: retrieve-licenses
+      shell: bash
+      env:
+        GITHUB_ENTERPRISE: ${{ inputs.enterprise }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        # Determine the script to run
+        if [ "${{ inputs.runtime }}" = "nodejs" ]; then
+          SCRIPT_CMD="node ${{ github.action_path }}/get_copilot_licenses.js"
+        else
+          SCRIPT_CMD="python ${{ github.action_path }}/get_copilot_licenses.py"
+        fi
+        
+        # Build the command arguments
+        ARGS="--enterprise ${{ inputs.enterprise }}"
+        ARGS="$ARGS --per-page ${{ inputs.per-page }}"
+        
+        if [ "${{ inputs.include-billing }}" = "true" ]; then
+          ARGS="$ARGS --billing"
+        fi
+        
+        if [ "${{ inputs.include-summary }}" = "true" ]; then
+          ARGS="$ARGS --summary"
+        fi
+        
+        # Generate JSON file
+        JSON_FILE="${{ inputs.output-file }}_$(date +%Y%m%d).json"
+        echo "Generating JSON report: $JSON_FILE"
+        $SCRIPT_CMD $ARGS --output "$JSON_FILE" --format json
+        
+        # Generate CSV file if requested
+        if [ "${{ inputs.output-format }}" = "csv" ] || [ "${{ inputs.output-format }}" = "both" ]; then
+          CSV_FILE="${{ inputs.output-file }}_$(date +%Y%m%d).csv"
+          echo "Generating CSV report: $CSV_FILE"
+          $SCRIPT_CMD $ARGS --output "$CSV_FILE" --format csv
+          echo "csv-file=$CSV_FILE" >> $GITHUB_OUTPUT
+        fi
+        
+        # Extract information from JSON for outputs
+        if [ -f "$JSON_FILE" ]; then
+          TOTAL_SEATS=$(jq -r '.total_seats' "$JSON_FILE")
+          ORGANIZATIONS=$(jq -r '[.seats[].organization.login] | unique | join(",")' "$JSON_FILE")
+          
+          echo "total-seats=$TOTAL_SEATS" >> $GITHUB_OUTPUT
+          echo "json-file=$JSON_FILE" >> $GITHUB_OUTPUT
+          echo "organizations=$ORGANIZATIONS" >> $GITHUB_OUTPUT
+          
+          echo "✅ Successfully retrieved $TOTAL_SEATS Copilot licenses"
+        else
+          echo "❌ Failed to generate license report"
+          exit 1
+        fi
+        
+    - name: Create step summary
+      if: inputs.include-summary == 'true'
+      shell: bash
+      env:
+        TOTAL_SEATS: ${{ steps.retrieve-licenses.outputs.total-seats }}
+        ORGANIZATIONS: ${{ steps.retrieve-licenses.outputs.organizations }}
+        JSON_FILE: ${{ steps.retrieve-licenses.outputs.json-file }}
+      run: |
+        echo "## 📊 GitHub Copilot License Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**📅 Generated:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+        echo "**🏢 Enterprise:** ${{ inputs.enterprise }}" >> $GITHUB_STEP_SUMMARY
+        echo "**💺 Total Seats:** $TOTAL_SEATS" >> $GITHUB_STEP_SUMMARY
+        echo "**📁 Output File:** $JSON_FILE" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Organizations breakdown
+        if [ -n "$ORGANIZATIONS" ]; then
+          echo "### 🏢 Organizations" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Organization | Seats |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|-------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Count seats per organization from the JSON file
+          if [ -f "$JSON_FILE" ]; then
+            jq -r '
+              .seats | group_by(.organization.login) | 
+              map({org: .[0].organization.login, count: length}) | 
+              .[] | "| \(.org) | \(.count) |"
+            ' "$JSON_FILE" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Files Generated" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- 📄 JSON: \`$JSON_FILE\`" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -n "${{ steps.retrieve-licenses.outputs.csv-file }}" ]; then
+          echo "- 📊 CSV: \`${{ steps.retrieve-licenses.outputs.csv-file }}\`" >> $GITHUB_STEP_SUMMARY
+        fi

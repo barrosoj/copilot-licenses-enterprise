@@ -1,0 +1,19 @@
+{
+  "name": "copilot-licenses-enterprise",
+  "version": "1.0.0",
+  "description": "GitHub Action to retrieve and report on GitHub Copilot licenses across an enterprise",
+  "main": "get_copilot_licenses.js",
+  "keywords": [
+    "github",
+    "copilot",
+    "licenses",
+    "enterprise",
+    "action",
+    "billing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
