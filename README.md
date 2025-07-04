@@ -1,18 +1,52 @@
 # GitHub Copilot License Retrieval Action
 
-A reusable GitHub Action to retrieve and report on GitHub Copilot licenses across an enterprise. This action provides comprehensive license management and compliance reporting capabilities.
+A lightweight, reusable GitHub Action to retrieve and report on GitHub Copilot licenses across an enterprise. Perfect for license management, compliance reporting, and billing analysis.
 
-## Features
+## 🚀 Features
 
-- ✅ Retrieve all Copilot seat assignments for an enterprise
-- ✅ Support for pagination to handle large enterprises  
-- ✅ Multiple output formats (JSON, CSV)
-- ✅ Detailed summary reporting with step summaries
-- ✅ Both Node.js and Python runtime support
-- ✅ Billing summary information
-- ✅ Comprehensive error handling
+- ✅ **Multiple output formats** - JSON and CSV with clean, essential data
+- ✅ **Pagination support** - Handles enterprises with hundreds of seats
+- ✅ **Artifact integration** - Works seamlessly with `upload-artifact`
+- ✅ **Comprehensive outputs** - Total seats, file paths, and organization data
 
-## Usage
+## 📊 Output Data
+
+### JSON Format
+```json
+{
+  "total_seats": 150,
+  "retrieved_at": "2025-07-04T12:00:00Z",
+  "seats": [
+    {
+      "assignee": {
+        "login": "username"
+      },
+      "pending_cancellation_date": null,
+      "plan_type": "business",
+      "last_activity_at": "2025-07-03T17:51:55Z",
+      "last_activity_editor": "vscode/1.101.2",
+      "assigning_team": {
+        "name": "development-team"
+      },
+      "organization": {
+        "login": "my-org"
+      }
+    }
+  ]
+}
+```
+
+### CSV Format
+Clean, spreadsheet-friendly columns:
+- `assignee_login` - Username
+- `pending_cancellation_date` - Cancellation date (if any)
+- `plan_type` - Copilot plan type
+- `last_activity_at` - Last activity timestamp
+- `last_activity_editor` - Editor used
+- `assigning_team_name` - Team that assigned the license
+- `organization_login` - Organization name
+
+## 🔧 Usage
 
 ### Basic Usage
 
@@ -21,13 +55,13 @@ A reusable GitHub Action to retrieve and report on GitHub Copilot licenses acros
   uses: your-org/copilot-licenses-enterprise@v1
   with:
     enterprise: 'your-enterprise-name'
-    token: ${{ secrets.GITHUB_TOKEN }}
+    token: ${{ secrets.COPILOT_TOKEN }}
 ```
 
-### Advanced Usage
+### Advanced Usage with Artifacts
 
 ```yaml
-- name: Generate Comprehensive Copilot Report
+- name: Generate Copilot License Report
   id: copilot-report
   uses: your-org/copilot-licenses-enterprise@v1
   with:
@@ -36,182 +70,100 @@ A reusable GitHub Action to retrieve and report on GitHub Copilot licenses acros
     output-format: 'both'  # Generates both JSON and CSV
     include-billing: true
     include-summary: true
-    runtime: 'nodejs'
     output-file: 'monthly_copilot_report'
-    per-page: 100
 
-- name: Use the outputs
+- name: Upload Reports as Artifacts
+  uses: actions/upload-artifact@v4
+  with:
+    name: copilot-license-reports
+    path: |
+      ${{ steps.copilot-report.outputs.output-file-json }}
+      ${{ steps.copilot-report.outputs.output-file-csv }}
+    retention-days: 90
+
+- name: Display Summary
   run: |
-    echo "Total seats: ${{ steps.copilot-report.outputs.total-seats }}"
-    echo "JSON file: ${{ steps.copilot-report.outputs.output-file-json }}"
-    echo "CSV file: ${{ steps.copilot-report.outputs.output-file-csv }}"
-    echo "Organizations: ${{ steps.copilot-report.outputs.organizations }}"
+    echo "📊 Total Copilot Seats: ${{ steps.copilot-report.outputs.total-seats }}"
+    echo "🏢 Organizations: ${{ steps.copilot-report.outputs.organizations }}"
 ```
 
-## Inputs
+## 📝 Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `enterprise` | GitHub Enterprise name | ✅ Yes | - |
-| `token` | GitHub token with copilot billing permissions | ✅ Yes | - |
-| `output-format` | Output format (`json`, `csv`, or `both`) | ❌ No | `json` |
-| `output-file` | Output file name (without extension) | ❌ No | `copilot_licenses` |
+| `enterprise` | GitHub enterprise name | ✅ Yes | - |
+| `token` | GitHub token with `manage_billing:copilot` scope | ✅ Yes | - |
+| `output-format` | Output format: `json`, `csv`, or `both` | ❌ No | `json` |
 | `include-billing` | Include billing summary information | ❌ No | `false` |
-| `include-summary` | Show summary information in step summary | ❌ No | `true` |
-| `runtime` | Runtime to use (`nodejs` or `python`) | ❌ No | `nodejs` |
-| `per-page` | Results per page (max 100) | ❌ No | `100` |
+| `include-summary` | Show summary in step output | ❌ No | `true` |
+| `output-file` | Base name for output files | ❌ No | `copilot_licenses` |
+| `per-page` | Results per API page (max 100) | ❌ No | `100` |
 
-## Outputs
+## 📤 Outputs
 
-| Output | Description |
-|--------|-------------|
-| `total-seats` | Total number of Copilot seats |
-| `output-file-json` | Path to the generated JSON file |
-| `output-file-csv` | Path to the generated CSV file (if CSV format requested) |
-| `organizations` | Comma-separated list of organizations with Copilot licenses |
+| Output | Description | Example |
+|--------|-------------|---------|
+| `total-seats` | Total number of Copilot seats | `247` |
+| `output-file-json` | Path to generated JSON file | `copilot_licenses.json` |
+| `output-file-csv` | Path to generated CSV file | `copilot_licenses.csv` |
+| `organizations` | Comma-separated list of organizations | `org1,org2,org3` |
 
-## Required Permissions
+## 🔒 Required Token Permissions
 
-Your GitHub token needs the following scopes:
-- For enterprise access: `manage_billing:copilot`
-- For organization access: `copilot`
+Your GitHub Personal Access Token needs:
 
-## Output Formats
+- **Enterprise**: `manage_billing:copilot` scope
+- **Organization**: `copilot` scope
 
-### JSON Format
-The JSON output includes detailed information about each seat, billing summary (if requested), and metadata.
-
-### CSV Format
-The CSV format is flattened for easy analysis and includes:
-- `assignee_login` - Username of the seat assignee
-- `organization_login` - Organization name
-- `assigning_team_name` - Team name (if applicable)
-- `created_at`, `updated_at` - Timestamps
-- `last_activity_at`, `last_activity_editor` - Activity information
-- `pending_cancellation_date` - If seat is being cancelled
-
-## Example Workflows
-
-### 1. Weekly Scheduled Report
+## 📋 Example Workflow
 
 ```yaml
-name: Weekly Copilot License Report
-
+name: Copilot License Report
 on:
   schedule:
-    - cron: '0 9 * * 1'  # Every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'  # Weekly on Monday at 9 AM
 
 jobs:
-  weekly-report:
+  license-report:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Generate Weekly Report
-        uses: your-org/copilot-licenses-enterprise@v1
-        with:
-          enterprise: ${{ vars.ENTERPRISE_NAME }}
-          token: ${{ secrets.COPILOT_TOKEN }}
-          output-format: 'both'
-          include-billing: true
-          output-file: 'weekly_report'
-          
-      - name: Upload Reports
-        uses: actions/upload-artifact@v3
-        with:
-          name: weekly-copilot-reports
-          path: |
-            weekly_report_*.json
-            weekly_report_*.csv
-          retention-days: 90
+    - name: Generate License Report
+      id: report
+      uses: your-org/copilot-licenses-enterprise@v1
+      with:
+        enterprise: 'my-company'
+        token: ${{ secrets.COPILOT_TOKEN }}
+        output-format: 'both'
+        
+    - name: Upload Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: copilot-reports-${{ github.run_number }}
+        path: |
+          ${{ steps.report.outputs.output-file-json }}
+          ${{ steps.report.outputs.output-file-csv }}
+        retention-days: 90
 ```
 
-### 2. On-Demand Report with Notifications
+## 🛠️ Local Development
 
-```yaml
-name: Copilot License Report with Slack
+You can also run the script locally for testing:
 
-on:
-  workflow_dispatch:
-    inputs:
-      enterprise:
-        description: 'Enterprise name'
-        required: true
+```bash
+# Set environment variables
+export GITHUB_ENTERPRISE="your-enterprise"
+export GITHUB_TOKEN="ghp_your_token"
 
-jobs:
-  report-and-notify:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Generate License Report
-        id: report
-        uses: your-org/copilot-licenses-enterprise@v1
-        with:
-          enterprise: ${{ github.event.inputs.enterprise }}
-          token: ${{ secrets.COPILOT_TOKEN }}
-          include-billing: true
-          include-summary: false
-          
-      - name: Notify Slack
-        uses: 8398a7/action-slack@v3
-        with:
-          status: success
-          text: |
-            📊 Copilot Report Generated
-            💺 Total Seats: ${{ steps.report.outputs.total-seats }}
-            🏢 Organizations: ${{ steps.report.outputs.organizations }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-```
-
-### 3. Compliance Report with Email
-
-```yaml
-name: Monthly Compliance Report
-
-on:
-  schedule:
-    - cron: '0 8 1 * *'  # First day of month at 8 AM UTC
-
-jobs:
-  compliance-report:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Generate Compliance Report
-        id: compliance
-        uses: your-org/copilot-licenses-enterprise@v1
-        with:
-          enterprise: ${{ vars.ENTERPRISE_NAME }}
-          token: ${{ secrets.COPILOT_TOKEN }}
-          output-format: 'csv'
-          include-billing: true
-          output-file: 'compliance_report'
-          
-      - name: Email Report
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.company.com
-          server_port: 587
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "Monthly Copilot Compliance Report"
-          to: compliance@company.com
-          body: |
-            Monthly GitHub Copilot license compliance report.
-            
-            Total Seats: ${{ steps.compliance.outputs.total-seats }}
-            Report Date: $(date)
-          attachments: ${{ steps.compliance.outputs.output-file-csv }}
+# Run the script
+node get_copilot_licenses.js --output licenses.csv --format csv
 ```
 
 ## Error Handling
 
 The action includes comprehensive error handling for:
+
 - Invalid or expired tokens
-- Network connectivity issues
+- Network connectivity issues  
 - API rate limiting
 - Invalid enterprise names
 - Malformed responses
@@ -226,19 +178,12 @@ The action includes comprehensive error handling for:
 ## API Reference
 
 This action uses the GitHub Enterprise API endpoint:
-```
+
+```http
 GET https://api.github.com/enterprises/{enterprise}/copilot/billing/seats
 ```
 
 For more information, see the [GitHub API documentation](https://docs.github.com/en/rest/copilot/copilot-user-management).
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
 
 ## License
 

@@ -94,7 +94,7 @@ class CopilotLicenseRetriever {
                     break;
                 }
 
-                allSeats.push(...seats);
+                allSeats.push(...seats.map(seat => this.cleanSeatData(seat)));
 
                 // Check if there are more pages
                 if (seats.length < perPage) {
@@ -128,6 +128,27 @@ class CopilotLicenseRetriever {
             return {};
         }
     }
+
+    /**
+     * Clean seat data to include only essential fields
+     */
+    cleanSeatData(seat) {
+        return {
+            assignee: {
+                login: seat.assignee?.login
+            },
+            pending_cancellation_date: seat.pending_cancellation_date,
+            plan_type: seat.plan_type,
+            last_activity_at: seat.last_activity_at,
+            last_activity_editor: seat.last_activity_editor,
+            assigning_team: seat.assigning_team ? {
+                name: seat.assigning_team.name
+            } : null,
+            organization: {
+                login: seat.organization?.login
+            }
+        };
+    }
 }
 
 /**
@@ -156,16 +177,14 @@ async function saveToFile(data, filename, formatType = 'json') {
                         // Extract only the login from organization
                         flattened.organization_login = value.login || '';
                     } else if (key === 'assigning_team' && value && typeof value === 'object') {
-                        // Extract team name and slug
+                        // Extract only team name (no description)
                         flattened.assigning_team_name = value.name || '';
-                        flattened.assigning_team_slug = value.slug || '';
                     } else if (key === 'assigning_team' && value === null) {
                         // Handle null assigning_team
                         flattened.assigning_team_name = '';
-                        flattened.assigning_team_slug = '';
                     } else if (!['assignee', 'organization', 'assigning_team'].includes(key) && 
-                              typeof value !== 'object') {
-                        // Keep simple values as-is
+                              (typeof value !== 'object' || value === null)) {
+                        // Keep simple values as-is (including null values)
                         flattened[key] = value;
                     }
                 }
